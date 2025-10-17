@@ -11,7 +11,7 @@
 ```bash
 cd contracts
 npm i
-npm run node     # keep this terminal open
+npm run node   # keep this terminal open
 # in another terminal:
 npm run compile
 npm run deploy:local

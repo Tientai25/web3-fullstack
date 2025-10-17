@@ -24,22 +24,53 @@ export default function CounterPanel() {
 
   useEffect(() => { loadValue(); }, []);
 
+  // useEffect(() => {
+  //   let timer;
+  //   async function poll() {
+  //     const web3 = getWeb3();
+  //     const contract = new web3.eth.Contract(COUNTER_ABI, COUNTER_ADDRESS);
+  //     const latest = await web3.eth.getBlockNumber();
+  //     const evs = await contract.getPastEvents("ValueChanged", {
+  //       fromBlock: Math.max(latest - 500, 0),
+  //       toBlock: "latest"
+  //     });
+  //     const mapped = evs.reverse().slice(0, 10).map(e => ({
+  //       tx: e.transactionHash,
+  //       caller: e.returnValues.caller,
+  //       newValue: e.returnValues.newValue,
+  //       blockNumber: e.blockNumber
+  //     }));
+  //     setEvents(mapped);
+  //   }
+  //   poll();
+  //   timer = setInterval(poll, 3000);
+  //   return () => clearInterval(timer);
+  // }, []);
+
   useEffect(() => {
     let timer;
     async function poll() {
       const web3 = getWeb3();
       const contract = new web3.eth.Contract(COUNTER_ABI, COUNTER_ADDRESS);
-      const latest = await web3.eth.getBlockNumber();
+      const latestRaw = await web3.eth.getBlockNumber();
+      // explicit conversion to Number to avoid mixing BigInt with numbers
+      const latest = Number(latestRaw);
+      const fromBlock = Math.max(latest - 500, 0);
       const evs = await contract.getPastEvents("ValueChanged", {
-        fromBlock: Math.max(latest - 500, 0),
+        fromBlock,
         toBlock: "latest"
       });
-      const mapped = evs.reverse().slice(0, 10).map(e => ({
-        tx: e.transactionHash,
-        caller: e.returnValues.caller,
-        newValue: e.returnValues.newValue,
-        blockNumber: e.blockNumber
-      }));
+      const mapped = evs.reverse().slice(0, 10).map(e => {
+        const rawNew = e.returnValues.newValue;
+        // ensure newValue stored as string (safe for BigInt/BN/string)
+        const newValue = (typeof rawNew === "bigint") ? rawNew.toString() : String(rawNew);
+        return {
+          tx: e.transactionHash,
+          caller: e.returnValues.caller,
+          newValue,
+          blockNumber: e.blockNumber
+        };
+      });
       setEvents(mapped);
     }
     poll();
