@@ -5,6 +5,7 @@ export function useWallet() {
   const [account, setAccount] = useState(null);
   const [chainId, setChainId] = useState(null);
   const [balance, setBalance] = useState(null);
+  const [ens, setEns] = useState(null);
 
   useEffect(() => {
     if (!window.ethereum) return;
@@ -29,7 +30,12 @@ export function useWallet() {
     const { chainId } = await provider.getNetwork();
     setChainId(Number(chainId));
     setBalance(await getBalance(addr));
+    try {
+      // lookup ENS name (may be null)
+      const name = await provider.lookupAddress(addr)
+      setEns(name)
+    } catch (e) { console.warn('ens lookup', e) }
   }
 
-  return { account, chainId, balance, connect };
+  return { account, chainId, balance, ens, connect };
 }

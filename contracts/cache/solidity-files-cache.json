@@ -36,6 +36,42 @@
       "artifacts": [
         "Counter"
       ]
+    },
+    "C:\\Users\\Admin\\Downloads\\ĐoAnWeb3\\web3-fullstack\\contracts\\contracts\\Counter.sol": {
+      "lastModificationDate": 1762010813682,
+      "contentHash": "a07358dbb65ad91c1311e3e0e8f8fe47",
+      "sourceName": "contracts/Counter.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "Counter"
+      ]
     }
   }
 }
