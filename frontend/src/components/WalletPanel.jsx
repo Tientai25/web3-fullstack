@@ -1,8 +1,11 @@
 import React from "react";
 import { useWallet } from "../hooks/useWallet.js";
+import NetworkSelector from "./NetworkSelector";
+import { useNetwork } from "../contexts/NetworkContext";
 
 export default function WalletPanel() {
   const { account, chainId, balance, ens, connect } = useWallet();
+  const { currentNetwork } = useNetwork();
 
   const short = (a) => (a ? `${a.slice(0,6)}…${a.slice(-4)}` : '')
 
@@ -26,7 +29,12 @@ export default function WalletPanel() {
               </div>
             </div>
 
-            <div className="mt-2 text-sm text-slate-600">Balance: <span className="font-medium">{balance ?? '—'} ETH</span></div>
+            <div className="mt-2 text-sm text-slate-600">
+              Balance: <span className="font-medium">{balance ?? '—'} {currentNetwork?.symbol || 'ETH'}</span>
+            </div>
+            <div className="mt-4">
+              <NetworkSelector />
+            </div>
           </div>
         ) : (
           <div>

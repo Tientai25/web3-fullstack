@@ -43,19 +43,38 @@ export async function getProvider({ allowFallback = true } = {}) {
 }
 
 export async function getSigner() {
-  const provider = await getProvider();
-  // BrowserProvider supports eth_requestAccounts; JsonRpcProvider does not expose a user signer
-  if (provider instanceof BrowserProvider) {
-    try {
-      await provider.send("eth_requestAccounts", []);
-      return provider.getSigner();
-    } catch (err) {
-      console.warn("ethers: eth_requestAccounts failed or was rejected:", err);
-      throw new Error("User denied account access or request failed");
-    }
+  if (!window.ethereum) throw new Error("MetaMask not found");
+  
+  try {
+    // Use ethers v6 BrowserProvider
+    const provider = new BrowserProvider(window.ethereum, "any");
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    const signer = await provider.getSigner();
+    
+    // Override getFeeData to handle networks without EIP-1559
+    const originalGetFeeData = provider.getFeeData.bind(provider);
+    provider.getFeeData = async () => {
+      try {
+        return await originalGetFeeData();
+      } catch (error) {
+        if (error.message.includes("eth_maxPriorityFeePerGas")) {
+          const gasPrice = await provider.getGasPrice();
+          return {
+            gasPrice,
+            maxFeePerGas: gasPrice,
+            maxPriorityFeePerGas: gasPrice,
+            lastBaseFeePerGas: gasPrice
+          };
+        }
+        throw error;
+      }
+    };
+    
+    return signer;
+  } catch (err) {
+    console.warn("ethers: getSigner failed:", err);
+    throw new Error("Failed to get signer: " + err.message);
   }
-
-  throw new Error("No signer available (using JSON-RPC fallback)");
 }
 
 export async function getBalance(address) {

@@ -8,15 +8,21 @@ import StatsPanel from "./components/StatsPanel.jsx";
 import { TransactionProvider } from './contexts/TransactionContext.jsx'
 import { TxManagerProvider } from './contexts/TxManager.jsx'
 import { DarkModeProvider } from './contexts/DarkModeContext.jsx'
+import { NetworkProvider } from './contexts/NetworkContext.jsx'
+import { NFTProvider } from './contexts/NFTContext.jsx'
 import TxList from './components/TxList.jsx'
 import TxToast from './components/TxToast.jsx'
 import Footer from './components/Footer.jsx'
+import MintCertificateForm from './components/MintCertificateForm.jsx'
+import CertificateGallery from './components/CertificateGallery.jsx'
 
 export default function App() {
   return (
     <DarkModeProvider>
-      <TransactionProvider>
-        <TxManagerProvider>
+      <NetworkProvider>
+        <NFTProvider>
+          <TransactionProvider>
+            <TxManagerProvider>
           <Layout>
           <Header />
 
@@ -38,6 +44,14 @@ export default function App() {
               <WalletPanel />
               <CounterPanel />
             </div>
+
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold mb-6">NFT Achievements</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <MintCertificateForm />
+                <CertificateGallery />
+              </div>
+            </div>
           </main>
 
           <Footer />
@@ -46,6 +60,8 @@ export default function App() {
           </Layout>
         </TxManagerProvider>
       </TransactionProvider>
+    </NFTProvider>
+    </NetworkProvider>
     </DarkModeProvider>
   );
 }

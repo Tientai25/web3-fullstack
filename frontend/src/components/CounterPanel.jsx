@@ -1,16 +1,15 @@
 import React, { useEffect, useState, useContext } from "react";
 import { getProvider, getSigner, makeContract } from "../lib/ethersClient.js";
-import { getWeb3 } from "../lib/web3Client.js";
 import { COUNTER_ADDRESS, COUNTER_ABI } from "../contract.js";
-import { TransactionContext } from '../contexts/TransactionContext.jsx'
-import { TxManagerContext } from '../contexts/TxManager.jsx'
+import { TransactionContext } from '../contexts/TransactionContext.jsx';
+import { TxManagerContext } from '../contexts/TxManager.jsx';
+import EventList from './EventList';
 
 export default function CounterPanel() {
   const [value, setValue] = useState("?");
-  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { addTx, updateTx } = useContext(TransactionContext)
-  const { sendContractTx } = useContext(TxManagerContext)
+  const { addTx, updateTx } = useContext(TransactionContext);
+  const { sendContractTx } = useContext(TxManagerContext);
 
   const loadValue = async () => {
     try {
@@ -27,63 +26,42 @@ export default function CounterPanel() {
   const callTx = async (fnName) => {
     try {
       setLoading(true);
-      const provider = await getProvider();
-      const c = makeContract(COUNTER_ADDRESS, COUNTER_ABI, provider);
-      // delegate sending to TxManager which will add/update txs and handle gas presets
+      const signer = await getSigner();
+      const c = makeContract(COUNTER_ADDRESS, COUNTER_ABI, signer);
+      
       if (sendContractTx) {
-        await sendContractTx(c, fnName, [], fnName, 'normal')
+        // Đảm bảo contract được kết nối với signer
+        const connectedContract = c.connect(signer);
+        await sendContractTx(connectedContract, fnName, [], fnName, 'normal');
       } else {
-        // fallback: direct signer call
-        const signer = await getSigner();
-        const c2 = makeContract(COUNTER_ADDRESS, COUNTER_ABI, signer);
-        const tx = await c2[fnName]()
-        const receipt = await tx.wait()
+        // Fallback không sử dụng TxManager
+        const tx = await c[fnName]();
+        // ensure fallback txs are recorded in tx history
+        try {
+          addTx({ hash: tx.hash, action: fnName, status: 'pending', meta: { to: tx.to, data: tx.data, nonce: tx.nonce } });
+        } catch (e) { console.warn('addTx failed (fallback)', e) }
+        const receipt = await tx.wait();
+        try { updateTx(tx.hash, { status: 'confirmed', blockNumber: receipt.blockNumber }) } catch(e){}
       }
       await loadValue();
     } catch (err) {
       console.error('tx error', err);
-      // if tx has hash property (some providers attach it on error), mark failed
-      const maybeHash = err?.transactionHash || err?.hash
-      if (maybeHash && updateTx) updateTx(maybeHash, { status: 'failed' })
+      if (err.code === 4001) {
+        // User rejected transaction
+        console.log('Transaction was rejected by user');
+      } else {
+        // Other errors
+        const maybeHash = err?.transactionHash || err?.hash;
+        if (maybeHash && updateTx) {
+          updateTx(maybeHash, { status: 'failed' });
+        }
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => { loadValue(); }, []);
-
-  useEffect(() => {
-    let timer;
-    async function poll() {
-      try {
-        const web3 = getWeb3();
-        const contract = new web3.eth.Contract(COUNTER_ABI, COUNTER_ADDRESS);
-        const latestRaw = await web3.eth.getBlockNumber();
-        const latest = Number(latestRaw);
-        const fromBlock = Math.max(latest - 500, 0);
-        const evs = await contract.getPastEvents("ValueChanged", {
-          fromBlock,
-          toBlock: "latest"
-        });
-        const mapped = evs.reverse().slice(0, 10).map(e => {
-          const rawNew = e.returnValues.newValue;
-          const newValue = (typeof rawNew === "bigint") ? rawNew.toString() : String(rawNew);
-          return {
-            tx: e.transactionHash,
-            caller: e.returnValues.caller,
-            newValue,
-            blockNumber: e.blockNumber
-          };
-        });
-        setEvents(mapped);
-      } catch (err) {
-        console.error('poll events', err);
-      }
-    }
-    poll();
-    timer = setInterval(poll, 3000);
-    return () => clearInterval(timer);
-  }, []);
 
   return (
     <div className="bg-white/60 backdrop-blur-md border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm mt-6">
@@ -109,28 +87,7 @@ export default function CounterPanel() {
         <h4 className="text-sm font-medium mb-3">Recent Events</h4>
         <div className="rounded-lg border border-slate-200 overflow-hidden">
           <div className="max-h-44 overflow-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
-            {events.length === 0 ? (
-              <div className="p-4 text-xs text-slate-400 text-center">No recent events found.</div>
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {events.map((e, i) => (
-                  <li key={i} className="p-3 hover:bg-slate-50/50">
-                    <div className="flex items-start gap-3">
-                      <div className="text-xs text-slate-400 hidden sm:block">#{e.blockNumber}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm truncate">
-                          {e.caller.slice(0,6)}… → <span className="font-mono">{e.newValue}</span>
-                        </div>
-                        <div className="text-xs text-slate-400 flex items-center gap-2">
-                          <span className="sm:hidden">#{e.blockNumber}</span>
-                          <span>tx: {e.tx.slice(0,10)}…</span>
-                        </div>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <EventList />
           </div>
         </div>
       </div>

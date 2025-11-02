@@ -47,10 +47,13 @@ export function makeClients({ RPC_URL, CONTRACT_ADDRESS }) {
             toBlock: currentBlock
           });
           events.reverse().forEach(ev => {
+            const newValue = typeof ev.returnValues.newValue === 'bigint' 
+              ? ev.returnValues.newValue.toString()
+              : String(ev.returnValues.newValue);
             cache.pushEvent({
               tx: ev.transactionHash,
               caller: ev.returnValues.caller,
-              newValue: ev.returnValues.newValue,
+              newValue: newValue,
               blockNumber: ev.blockNumber
             });
           });
