@@ -4,6 +4,13 @@ import { TxManagerContext } from '../contexts/TxManager.jsx'
 
 function short(h) { return h ? `${h.slice(0,6)}…${h.slice(-4)}` : '' }
 
+function explorerFor(hash) {
+  const network = import.meta.env.VITE_NETWORK || 'mainnet'
+  if (network.includes('sepolia') || network.includes('sep')) return `https://sepolia.etherscan.io/tx/${hash}`
+  if (network.includes('goerli')) return `https://goerli.etherscan.io/tx/${hash}`
+  return `https://etherscan.io/tx/${hash}`
+}
+
 export default function TxList() {
   const { txs, clearAll } = useContext(TransactionContext)
   const { speedUp } = useContext(TxManagerContext)
@@ -17,13 +24,14 @@ export default function TxList() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'tx_history.csv'
+    const name = `tx_history_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`
+    a.download = name
     a.click()
     URL.revokeObjectURL(url)
   }
 
   return (
-    <aside className="fixed right-4 bottom-4 w-96 max-w-full z-50">
+    <aside className="fixed right-4 bottom-4 w-96 max-w-full z-50 sm:w-80 md:w-96">
       <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-xl shadow p-4">
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium">Transactions</div>
@@ -34,7 +42,7 @@ export default function TxList() {
         </div>
 
         <div className="mt-3 max-h-64 overflow-auto text-sm text-slate-700">
-          {txs.length === 0 ? (
+          {(!txs || txs.length === 0) ? (
             <div className="text-xs text-slate-400">No transactions yet.</div>
           ) : (
             <ul className="space-y-3">
@@ -45,14 +53,14 @@ export default function TxList() {
                     {t.status === 'confirmed' && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
                     {t.status === 'failed' && <div className="w-2 h-2 rounded-full bg-red-500" />}
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="font-medium">{t.action}</div>
+                      <div className="font-medium truncate">{t.action}</div>
                       <div className="flex items-center gap-2">
                         {t.status === 'pending' && (
-                          <button onClick={() => speedUp(t.hash)} className="text-xs bg-yellow-100 px-2 py-1 rounded-md">Speed up</button>
+                          <button aria-label={`Speed up tx ${t.hash}`} onClick={() => speedUp(t.hash)} className="text-xs bg-yellow-100 px-2 py-1 rounded-md">Speed up</button>
                         )}
-                        <a className="text-xs text-slate-400" target="_blank" rel="noreferrer" href={`https://etherscan.io/tx/${t.hash}`}>{short(t.hash)}</a>
+                        <a className="text-xs text-slate-400 truncate" target="_blank" rel="noreferrer" href={explorerFor(t.hash)}>{short(t.hash)}</a>
                       </div>
                     </div>
                     <div className="text-xs text-slate-400">{new Date(t.timestamp).toLocaleString()} {t.blockNumber ? ` · block ${t.blockNumber}` : ''}</div>

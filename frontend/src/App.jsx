@@ -4,11 +4,13 @@ import Layout from './components/Layout.jsx'
 import Header from './components/Header.jsx'
 import WalletPanel from "./components/WalletPanel.jsx";
 import CounterPanel from "./components/CounterPanel.jsx";
+import StatsPanel from "./components/StatsPanel.jsx";
 import { TransactionProvider } from './contexts/TransactionContext.jsx'
 import { TxManagerProvider } from './contexts/TxManager.jsx'
 import { DarkModeProvider } from './contexts/DarkModeContext.jsx'
 import TxList from './components/TxList.jsx'
 import TxToast from './components/TxToast.jsx'
+import Footer from './components/Footer.jsx'
 
 export default function App() {
   return (
@@ -31,12 +33,14 @@ export default function App() {
               </div>
             </section>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+              <StatsPanel />
               <WalletPanel />
               <CounterPanel />
             </div>
           </main>
 
+          <Footer />
           <TxToast />
           <TxList />
           </Layout>
