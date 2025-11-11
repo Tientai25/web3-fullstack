@@ -19,19 +19,40 @@ export function TxManagerProvider({ children }) {
     const signer = await getSigner()
     const provider = await getProvider()
 
-    // estimate gas
+    // estimate gas - sửa cách gọi cho ethers v6
     let gasLimit
     try {
-      gasLimit = await contract.estimateGas[fnName](...args)
+      // Trong ethers v6, có thể dùng contract[fnName].estimateGas() hoặc contract.estimateGas[fnName]
+      // Thử cả 2 cách để tương thích
+      if (contract[fnName]?.estimateGas) {
+        gasLimit = await contract[fnName].estimateGas(...args)
+      } else if (contract.estimateGas?.[fnName]) {
+        gasLimit = await contract.estimateGas[fnName](...args)
+      } else {
+        // Fallback: tạo contract instance với signer để estimate
+        const connectedContract = contract.connect(signer)
+        gasLimit = await connectedContract[fnName].estimateGas(...args)
+      }
       // add 10% buffer
       gasLimit = gasLimit * BigInt(110) / BigInt(100)
     } catch (err) {
-      console.warn('estimateGas failed', err)
+      // Không log warning nếu chỉ là fallback bình thường
       gasLimit = BigInt(300_000)
     }
 
-    // fee data
-    const feeData = await provider.getFeeData()
+    // fee data - xử lý mạng không hỗ trợ EIP-1559
+    let feeData
+    try {
+      feeData = await provider.getFeeData()
+    } catch (err) {
+      // Nếu getFeeData fail (mạng không hỗ trợ EIP-1559), dùng gasPrice
+      const gasPrice = await provider.getGasPrice()
+      feeData = {
+        gasPrice,
+        maxFeePerGas: gasPrice,
+        maxPriorityFeePerGas: gasPrice,
+      }
+    }
     const baseMax = feeData.maxFeePerGas ?? feeData.gasPrice ?? BigInt(0)
     const basePriority = feeData.maxPriorityFeePerGas ?? feeData.gasPrice ?? BigInt(0)
     const mul = PRESETS[preset] ?? PRESETS.normal

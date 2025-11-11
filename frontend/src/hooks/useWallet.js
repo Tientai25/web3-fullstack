@@ -26,15 +26,31 @@ export function useWallet() {
     const signer = await getSigner();
     const addr = await (await signer).getAddress();
     setAccount(addr);
+
     const provider = await getProvider();
     const { chainId } = await provider.getNetwork();
     setChainId(Number(chainId));
+
     setBalance(await getBalance(addr));
+
     try {
-      // lookup ENS name (may be null)
-      const name = await provider.lookupAddress(addr)
-      setEns(name)
-    } catch (e) { console.warn('ens lookup', e) }
+      // ✅ Chỉ lookup ENS nếu network hỗ trợ
+      const network = await provider.getNetwork();
+      let name = null;
+
+      if (["homestead", "mainnet", "sepolia", "goerli"].includes(network.name)) {
+        name = await provider.lookupAddress(addr);
+      }
+
+      setEns(name);
+    } catch (e) {
+      // ✅ Bỏ qua lỗi ENS (không thay đổi logic cũ)
+      if (e.code === "UNSUPPORTED_OPERATION") {
+        console.warn("ENS lookup skipped — network does not support ENS");
+      } else {
+        console.warn("ens lookup", e);
+      }
+    }
   }
 
   return { account, chainId, balance, ens, connect };

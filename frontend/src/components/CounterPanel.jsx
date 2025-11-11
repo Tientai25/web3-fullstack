@@ -30,9 +30,8 @@ export default function CounterPanel() {
       const c = makeContract(COUNTER_ADDRESS, COUNTER_ABI, signer);
       
       if (sendContractTx) {
-        // Đảm bảo contract được kết nối với signer
-        const connectedContract = c.connect(signer);
-        await sendContractTx(connectedContract, fnName, [], fnName, 'normal');
+        // Không cần connect trước, TxManager sẽ xử lý
+        await sendContractTx(c, fnName, [], fnName, 'normal');
       } else {
         // Fallback không sử dụng TxManager
         const tx = await c[fnName]();

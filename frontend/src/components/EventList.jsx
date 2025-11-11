@@ -9,6 +9,7 @@ export default function EventList() {
   useEffect(() => {
     let timer;
     let lastProcessedBlock = 0;
+    const MAX_BLOCK_RANGE = 2000; // Giới hạn block mỗi lần truy vấn (tránh limit exceeded)
 
     async function pollEvents() {
       try {
@@ -16,28 +17,39 @@ export default function EventList() {
         const contract = makeContract(COUNTER_ADDRESS, COUNTER_ABI, provider);
         
         const currentBlock = await provider.getBlockNumber();
-        
-        // First time polling
+
+        // Lần đầu tiên polling
         if (lastProcessedBlock === 0) {
           lastProcessedBlock = Math.max(currentBlock - 500, 0);
         }
 
-        // Only get new events
+        // Chỉ lấy các event mới
         if (currentBlock > lastProcessedBlock) {
           const filter = contract.filters.ValueChanged();
-          const newEvents = await contract.queryFilter(filter, lastProcessedBlock + 1, currentBlock);
 
-          const mappedEvents = newEvents.map(event => ({
-            tx: event.transactionHash,
-            caller: event.args[0],
-            newValue: event.args[1].toString(),
-            blockNumber: event.blockNumber
-          }));
+          // Nếu chênh lệch block quá lớn, chia nhỏ request
+          let fromBlock = lastProcessedBlock + 1;
+          while (fromBlock <= currentBlock) {
+            const toBlock = Math.min(fromBlock + MAX_BLOCK_RANGE - 1, currentBlock);
 
-          setEvents(prev => {
-            const combined = [...mappedEvents.reverse(), ...prev];
-            return combined.slice(0, 10); // Keep only 10 most recent events
-          });
+            const newEvents = await contract.queryFilter(filter, fromBlock, toBlock);
+
+            if (newEvents.length > 0) {
+              const mappedEvents = newEvents.map(event => ({
+                tx: event.transactionHash,
+                caller: event.args[0],
+                newValue: event.args[1].toString(),
+                blockNumber: event.blockNumber
+              }));
+
+              setEvents(prev => {
+                const combined = [...mappedEvents.reverse(), ...prev];
+                return combined.slice(0, 10); // Giữ 10 event gần nhất
+              });
+            }
+
+            fromBlock = toBlock + 1; // Tiếp tục batch tiếp theo
+          }
 
           lastProcessedBlock = currentBlock;
         }
@@ -46,7 +58,7 @@ export default function EventList() {
       }
     }
 
-    // Initial poll and set interval
+    // Poll ngay lập tức và lặp lại mỗi 3s
     pollEvents();
     timer = setInterval(pollEvents, 3000);
 

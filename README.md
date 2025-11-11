@@ -195,4 +195,320 @@ Những thay đổi tập trung vào giao diện và trải nghiệm người d�
 
 ---
 
+## 🔧 Cơ chế hoạt động chi tiết (Technical Deep Dive)
+
+### 1. Smart Contract - Counter.sol
+
+**Chức năng:**
+- `current()`: View function trả về giá trị hiện tại của counter (không tốn gas)
+- `increment()`: Tăng giá trị lên 1 và emit event `ValueChanged`
+- `decrement()`: Giảm giá trị xuống 1 và emit event `ValueChanged`
+
+**Event:**
+```solidity
+event ValueChanged(address indexed caller, int256 newValue);
+```
+- `caller`: Địa chỉ người gọi function (indexed để filter)
+- `newValue`: Giá trị mới sau khi thay đổi
+
+### 2. Cơ chế Increment/Decrement (Frontend → Blockchain)
+
+#### Luồng hoạt động khi user ấn nút Increment/Decrement:
+
+**Bước 1: User Action (CounterPanel.jsx)**
+```javascript
+onClick={() => callTx('increment')} // hoặc 'decrement'
+```
+
+**Bước 2: Gọi Transaction (callTx function)**
+```javascript
+const callTx = async (fnName) => {
+  1. setLoading(true) - Disable buttons
+  2. Lấy signer từ MetaMask (getSigner)
+  3. Tạo contract instance với signer
+  4. Gọi sendContractTx() từ TxManager
+}
+```
+
+**Bước 3: Transaction Manager (TxManager.jsx)**
+```javascript
+sendContractTx() thực hiện:
+  1. Estimate gas limit (thêm 10% buffer)
+  2. Lấy fee data (xử lý mạng không hỗ trợ EIP-1559)
+  3. Tính toán gas price theo preset (slow/normal/fast)
+  4. Gửi transaction với overrides
+  5. Ghi nhận transaction vào history (pending)
+  6. Đợi receipt (confirmed)
+  7. Cập nhật transaction status
+```
+
+**Bước 4: MetaMask Confirmation**
+- User xác nhận transaction trong MetaMask popup
+- Transaction được broadcast lên blockchain
+
+**Bước 5: Transaction Execution**
+- Transaction được mine vào block
+- Smart contract thực thi:
+  - `_value += 1` (hoặc `-= 1`)
+  - `emit ValueChanged(msg.sender, _value)`
+
+**Bước 6: UI Update**
+```javascript
+await loadValue() - Đọc giá trị mới từ blockchain
+```
+
+#### Error Handling:
+- Code 4001: User rejected → Log message
+- Transaction failed → Update status to 'failed'
+- Network errors → Display error message
+
+### 3. Cơ chế Event Polling (Backend)
+
+**Khởi động Backend (blockchain.js):**
+
+```javascript
+startEventPolling() {
+  1. Lấy block number hiện tại
+  2. Query events từ 500 blocks trước (để lấy events cũ)
+  3. Chia nhỏ query thành batches (2000 blocks/batch)
+  4. Load events vào cache
+  5. Bắt đầu polling mỗi 3 giây
+}
+```
+
+**Polling Loop (mỗi 3 giây):**
+```javascript
+setInterval(async () => {
+  1. Lấy block number hiện tại
+  2. So sánh với latest block đã xử lý
+  3. Query events từ (latest + 1) đến currentBlock
+  4. Process từng event:
+     - Convert BigInt → String
+     - Thêm vào cache (cache.pushEvent)
+  5. Cập nhật latest = currentBlock
+}, 3000)
+```
+
+**Cache System (cache.js):**
+```javascript
+class Cache {
+  events = [] // Array lưu tối đa 100 events gần nhất
+  
+  pushEvent(event) {
+    this.events.unshift(event) // Thêm vào đầu
+    this.events = this.events.slice(0, 100) // Giới hạn 100
+  }
+}
+```
+
+**Lưu ý kỹ thuật:**
+- Convert BigInt → Number để tránh lỗi "Cannot mix BigInt"
+- Chia nhỏ query để tránh "query returned more than 10000 results"
+- Error handling cho từng batch riêng biệt
+
+### 4. Nút Reload - Read-Only Operation
+
+**Cơ chế:**
+```javascript
+const loadValue = async () => {
+  1. Lấy provider (không cần signer)
+  2. Tạo contract instance với provider (read-only)
+  3. Gọi contract.current() - View function
+  4. Cập nhật UI với giá trị mới
+}
+```
+
+**Đặc điểm:**
+- ✅ Không tốn gas
+- ✅ Không cần MetaMask confirmation
+- ✅ Nhanh (~100ms)
+- ✅ An toàn (read-only)
+
+**Khi nào dùng:**
+- Sau transaction từ ví khác
+- Khi UI không đồng bộ
+- Refresh thủ công giá trị
+
+### 5. API Endpoints (Backend)
+
+#### GET `/api/health`
+- **Mục đích:** Health check
+- **Response:** `{ ok: true }`
+- **Use case:** Frontend kiểm tra API status
+
+#### GET `/api/counter/value`
+- **Mục đích:** Lấy giá trị hiện tại của counter
+- **Implementation:**
+  ```javascript
+  const value = await chain.readValue() // Gọi contract.current()
+  ```
+- **Response:** `{ value: "11" }`
+- **Use case:** StatsPanel auto-refresh
+
+#### GET `/api/counter/events`
+- **Mục đích:** Lấy danh sách events từ cache
+- **Implementation:**
+  ```javascript
+  const events = cache.events // Lấy từ cache
+  // Serialize: convert BigInt → String
+  ```
+- **Response:** `{ events: [...] }`
+- **Use case:** StatsPanel hiển thị số lượng events
+
+### 6. Frontend Components Flow
+
+#### CounterPanel Component Tree:
+```
+CounterPanel
+├── loadValue() - Read counter value
+├── callTx() - Send transaction
+└── EventList (child component)
+    └── pollEvents() - Poll events mỗi 3s
+```
+
+#### StatsPanel Component:
+```javascript
+useEffect(() => {
+  load() // Load ngay lập tức
+  setInterval(() => load(), 5000) // Auto-refresh mỗi 5s
+}, [])
+```
+
+**Load function:**
+1. Fetch `/api/health` → Update API Health
+2. Fetch `/api/counter/value` → Update Contract Value
+3. Fetch `/api/counter/events` → Update Events Count
+
+### 7. Transaction Management System
+
+#### TransactionContext:
+- Lưu trữ transaction history trong localStorage
+- Cung cấp `addTx()`, `updateTx()` cho components
+
+#### TxManager:
+- Quản lý gas estimation
+- Xử lý fee calculation (EIP-1559 support)
+- Transaction status tracking (pending → confirmed/failed)
+
+#### Transaction States:
+```
+pending → confirmed ✅
+pending → failed ❌
+pending → replaced (speedup)
+```
+
+### 8. Event Display System
+
+#### Backend Event Polling:
+- Polling interval: 3 giây
+- Query range: latest + 1 → currentBlock
+- Cache limit: 100 events gần nhất
+
+#### Frontend Event Display:
+- EventList component: Poll mỗi 3 giây
+- Query từ 500 blocks trước
+- Display tối đa 10 events gần nhất
+
+**Lưu ý:** Frontend và Backend đều poll events độc lập:
+- Backend: Lưu vào cache, phục vụ API
+- Frontend: Hiển thị trực tiếp cho user
+
+### 9. Error Handling & Edge Cases
+
+#### BigInt Handling:
+- `web3.eth.getBlockNumber()` trả về BigInt
+- Convert tất cả về Number để tránh lỗi
+- Serialize BigInt → String khi trả về API
+
+#### Network Compatibility:
+- Hardhat Local không hỗ trợ EIP-1559
+- Fallback sang `gasPrice` thay vì `maxFeePerGas`
+- Xử lý trong `getFeeData()` với try-catch
+
+#### Gas Estimation Failure:
+- Fallback: Dùng gas limit mặc định (300,000)
+- Không crash application
+- Log warning để debug
+
+### 10. Performance Optimizations
+
+1. **Cache Layer:**
+   - Giảm số lần query blockchain
+   - API response nhanh hơn
+
+2. **Polling Intervals:**
+   - Backend: 3s (balance giữa real-time và performance)
+   - Frontend: 5s (đủ cho user experience)
+
+3. **Batch Query:**
+   - Chia nhỏ query events (2000 blocks/batch)
+   - Tránh timeout và rate limit
+
+4. **React Optimizations:**
+   - useState cho local state
+   - useContext cho global state
+   - useEffect với cleanup
+
+---
+
+## 📊 Kiến trúc tổng thể (Architecture Overview)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Smart Contract Layer                  │
+│  Counter.sol: increment(), decrement(), current()       │
+│  Emits: ValueChanged(address, int256)                   │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+       ┌───────────────┴───────────────┐
+       │                               │
+┌──────▼──────────┐          ┌─────────▼─────────┐
+│  Backend API    │          │  Frontend (React)│
+│  (Express.js)   │          │  (Vite + React)  │
+├─────────────────┤          ├───────────────────┤
+│ • ethers.js     │◄───────►│ • ethers.js      │
+│   (read value)  │  REST    │   (transactions) │
+│                 │  API     │                   │
+│ • web3.js       │          │ • MetaMask       │
+│   (event poll)  │          │   integration    │
+│                 │          │                   │
+│ • Cache layer   │          │ • State mgmt     │
+│   (events)      │          │   (Context API)  │
+└─────────────────┘          └───────────────────┘
+       │                               │
+       └───────────────┬───────────────┘
+                       │
+              ┌────────▼────────┐
+              │  Blockchain     │
+              │  (Hardhat/Testnet)│
+              └──────────────────┘
+```
+
+---
+
+## 🔍 Debugging & Troubleshooting
+
+### Common Issues:
+
+1. **Events không cập nhật:**
+   - Kiểm tra backend polling logs
+   - Verify CONTRACT_ADDRESS trong .env
+   - Check RPC connection
+
+2. **Transaction failed:**
+   - Kiểm tra MetaMask network
+   - Verify contract address
+   - Check gas limit
+
+3. **BigInt errors:**
+   - Đã được fix: Convert tất cả về Number
+   - Nếu vẫn lỗi: Check code đã update chưa
+
+4. **API 500 errors:**
+   - Check backend logs
+   - Verify cache.events là array
+   - Check serialization
+
+---
+
 Nếu bạn muốn, tôi có thể tiếp tục tạo một trang `/docs` đầy đủ (route), thêm screenshot mẫu vào `docs/ui.md`, hoặc bổ sung một vài unit test để minh hoạ tính nghiêm túc kỹ thuật trong báo cáo.

@@ -14,8 +14,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const chain = makeClients({ RPC_URL, CONTRACT_ADDRESS });
-chain.startEventPolling();
+let chain;
+try {
+  chain = makeClients({ RPC_URL, CONTRACT_ADDRESS });
+  // Không block - polling sẽ chạy async
+  chain.startEventPolling().catch(err => {
+    console.error("Failed to start event polling:", err);
+  });
+} catch (e) {
+  console.error("Failed to initialize blockchain clients:", e);
+  // Nếu không có CONTRACT_ADDRESS, vẫn có thể chạy API nhưng không có counter features
+}
 
 // Initialize Certificate Service
 import CertificateService from './certificate.js';
@@ -33,7 +42,27 @@ app.get("/api/counter/value", async (_, res) => {
 });
 
 app.get("/api/counter/events", (_, res) => {
-  res.json({ events: cache.events });
+  try {
+    // Đảm bảo events luôn là array và serialize được
+    const events = Array.isArray(cache.events) ? cache.events : [];
+    
+    // Đảm bảo mỗi event có thể serialize (convert BigInt nếu có)
+    const serializableEvents = events.map(ev => ({
+      tx: String(ev.tx || ''),
+      caller: String(ev.caller || ''),
+      newValue: String(ev.newValue || ''),
+      blockNumber: typeof ev.blockNumber === 'bigint' 
+        ? ev.blockNumber.toString() 
+        : String(ev.blockNumber || '')
+    }));
+    
+    console.log(`[API] Returning ${serializableEvents.length} events`);
+    res.json({ events: serializableEvents });
+  } catch (e) {
+    console.error("Error getting events:", e);
+    console.error("Error stack:", e.stack);
+    res.status(500).json({ error: e.message, events: [] });
+  }
 });
 
 // Certificate endpoints
