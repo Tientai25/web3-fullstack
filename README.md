@@ -110,9 +110,11 @@ Add Localhost 8545 (ChainId 31337). Import one private key from Hardhat node out
 cd contracts
 npm i
 npx hardhat node
+npm run node   # keep this terminal open
 
 # Terminal 2: Deploy contract
 cd contracts
+npm run compile
 npm run deploy:local  # copy địa chỉ contract
 
 # Terminal 3: Backend
@@ -123,6 +125,8 @@ npm run dev
 
 # Terminal 4: Frontend
 cd frontend
+npm install nft.storage
+# thêm vào để xử lý nft v2 mượt hơn
 cp .env.example .env  # paste địa chỉ contract
 npm i
 npm run dev
@@ -153,7 +157,7 @@ npm run dev
 - `npm run deploy:sepolia` in `contracts`
 - Update backend & frontend `.env` with new address; switch MetaMask to Sepolia.
 
-## Giao diện Frontend (Pro) — Hướng dẫn cho báo cáo A+
+## Giao diện Frontend
 
 Phần frontend đã được tinh chỉnh để trông chuyên nghiệp, responsive và dễ demo cho người chấm. Các điểm nổi bật:
 
@@ -172,7 +176,7 @@ Cách demo cho giáo viên / hội đồng chấm:
 
 Tài liệu bổ sung (nếu cần trong báo cáo): chụp màn hình cho 3 kích thước — mobile (375px), tablet (768px) và desktop (1440px) để minh hoạ tính responsive.
 
-## Những cải tiến mới (dành cho báo cáo A+)
+## Những cải tiến mới
 
 - **StatsPanel**: Bổ sung panel thống kê nhanh (contract value, số events recent, API health, last update). Panel này dùng backend `/api` để lấy dữ liệu và tự động refresh.
 - **Tx UI được nâng cấp**: Toasts và Transaction list giờ có badges màu, liên kết mở explorer theo network (VITE_NETWORK), tên file export CSV có timestamp, và layout mobile-friendly.
@@ -181,7 +185,7 @@ Tài liệu bổ sung (nếu cần trong báo cáo): chụp màn hình cho 3 kí
 ### Tính năng "Generate Report" (mới)
 
 - Nút "Generate Report" nằm trong `StatsPanel` — khi bấm sẽ thu thập snapshot hiện tại từ backend (`/api/counter/value`, `/api/counter/events`) và lịch sử giao dịch cục bộ (localStorage) rồi tạo một file Markdown tải về (`demo-report-<timestamp>.md`).
-- Mục đích: nhanh chóng tạo tài liệu demo để đính kèm vào báo cáo (A+), bao gồm giá trị hiện tại, 5 events gần nhất và 20 giao dịch gần nhất.
+- Mục đích: nhanh chóng tạo tài liệu demo để đính kèm vào báo cáo, bao gồm giá trị hiện tại, 5 events gần nhất và 20 giao dịch gần nhất.
 - Lưu ý: file này chỉ thu thập dữ liệu read-only; không thực thi giao dịch hay thay đổi trạng thái blockchain.
 
 ## Ghi chú thay đổi (ngắn)
